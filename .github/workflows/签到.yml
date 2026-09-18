@@ -33,6 +33,7 @@ jobs:
       - name: 执行签到
         run: npm run main
         env:
+          platform: lite
           USERINFO: ${{ secrets.USERINFO }}
           PAT: ${{ secrets.PAT }}
           GITHUB_REPOSITORY: ${{ github.repository }}
