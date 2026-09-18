@@ -66,6 +66,27 @@ async function main() {
         const safeNickname = maskDisplayName(userDetail.data.nickname)
         printMagenta(`账号 ${safeNickname} 开始领取VIP...`)
 
+        // 设备注册：无 dfid 时先注册真设备号（假 dfid 会触发 20028 账号风控，导致升级/领取被拒）
+        if (!user.dfid) {
+          printYellow('首次运行，注册设备获取 dfid...')
+          try {
+            const reg = await send(`/register/dev?timestrap=${Date.now()}`, 'POST', headers)
+            const regDfid = reg?.data?.dfid || reg?.dfid || ''
+            if (regDfid) {
+              user.dfid = regDfid
+              headers = { 'cookie': 'token=' + user.token + '; userid=' + user.userid + '; dfid=' + user.dfid }
+              needRefresh = true
+              printGreen(`设备注册成功，dfid 已写入凭证`)
+            } else {
+              printYellow(`设备注册未返回 dfid，继续用默认设备号（风控接口可能失败）`)
+            }
+          } catch (regErr) {
+            printYellow(`设备注册失败（不阻塞主流程）: ${regErr && regErr.message ? regErr.message : String(regErr)}`)
+          }
+        } else {
+          headers = { 'cookie': 'token=' + user.token + '; userid=' + user.userid + '; dfid=' + user.dfid }
+        }
+
         // 周日刷新token
         if (today.getDay() === 0) {
           const refreshToken = await send(`/login/token?timestrap=${Date.now()}`, "POST", headers)
