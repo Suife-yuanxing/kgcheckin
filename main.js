@@ -102,13 +102,21 @@ async function main() {
         printYellow("开始领取VIP...")
         let claimCount = 0
         let claimTotal = 0
+        let awardHours = 0
         for (let i = 1; i <= 8; i++) {
           // ad获取vip
           const ad = await send(`/youth/vip?timestrap=${Date.now()}`, "GET", headers)
           claimTotal = i
           if (ad.status === 1) {
-            printGreen(`第${i}次领取成功`)
+            // 解析服务端发奖确认（每次广告 +3 小时概念会员时长）
+            const adData = ad.data && typeof ad.data === 'object' ? ad.data : {}
+            if (i === 1 && Number(adData.remain) <= 0 && adData.remain !== undefined) {
+              printGreen("广告时长今日已达上限")
+              break
+            }
             claimCount++
+            awardHours += Number(adData.award_vip_hour) || 0
+            printGreen(`第${i}次领取成功`)
             if (i != 8) {
               await delay(30 * 1000)
             }
@@ -123,12 +131,36 @@ async function main() {
           }
         }
 
+        // 升级畅听会员 -> 概念版VIP（服务端每天限 1 次；297002 = 今日已升级）
+        printYellow("开始升级概念版VIP...")
+        const upgrade = await send(`/youth/day/vip/upgrade?timestrap=${Date.now()}`, "GET", headers)
+        let upgradeStatus = '未知'
+        if (upgrade.status === 1) {
+          printGreen("概念版VIP升级成功")
+          upgradeStatus = '成功'
+        } else if (upgrade.error_code === 297002) {
+          printGreen("概念版VIP今日已升级")
+          upgradeStatus = '今日已升级'
+        } else {
+          printRed("概念版VIP升级失败")
+          errorMsg[`${safeNickname} upgrade`] = summarizeResponse(upgrade)
+          upgradeStatus = '失败'
+          hasError = true
+        }
+
         let vipExpiry = '未知'
+        let conceptExpiry = '未知'
         const vip_details = await send(`/user/vip/detail?timestrap=${Date.now()}`, "GET", headers)
         if (vip_details.status === 1 && Array.isArray(vip_details.data?.busi_vip) && vip_details.data.busi_vip.length > 0) {
-          vipExpiry = vip_details.data.busi_vip[0].vip_end_time
+          // tvip = 畅听VIP，svip = 概念版VIP
+          for (const item of vip_details.data.busi_vip) {
+            if (item.product_type === 'tvip') vipExpiry = item.vip_end_time
+            else if (item.product_type === 'svip') conceptExpiry = item.vip_end_time
+          }
+          if (!vipExpiry && vip_details.data.busi_vip[0]?.vip_end_time) vipExpiry = vip_details.data.busi_vip[0].vip_end_time
           printBlue(`今天是：${date}`)
-          printBlue(`VIP到期时间：${vipExpiry}\n`)
+          printBlue(`畅听VIP到期时间：${vipExpiry}`)
+          printBlue(`概念版VIP到期时间：${conceptExpiry}\n`)
         } else {
           printRed("获取失败\n")
           errorMsg[`${safeNickname} vip_details`] = summarizeResponse(vip_details)
@@ -137,10 +169,13 @@ async function main() {
 
         notifyResults.push({
           nickname: safeNickname,
-          status: listenStatus === '失败' || claimCount === 0 ? '部分失败' : '成功',
+          status: listenStatus === '失败' || claimCount === 0 || upgradeStatus === '失败' ? '部分失败' : '成功',
           listen: listenStatus,
           vipClaim: `${claimCount}/${claimTotal}`,
           vipExpiry,
+          conceptExpiry,
+          upgradeStatus,
+          awardHours,
           error: ''
         })
       } catch (err) {
@@ -193,8 +228,10 @@ async function main() {
   for (const r of notifyResults) {
     content += `\n【${r.nickname}】\n`
     content += `  🎵 听歌领取: ${r.listen}\n`
-    content += `  🎁 VIP领取: ${r.vipClaim} 次\n`
-    content += `  ⏰ VIP到期: ${r.vipExpiry}\n`
+    content += `  🎁 VIP领取: ${r.vipClaim} 次${r.awardHours ? `（+${r.awardHours}小时）` : ''}\n`
+    content += `  🚀 概念版升级: ${r.upgradeStatus || '未知'}\n`
+    content += `  ⏰ 畅听VIP到期: ${r.vipExpiry}\n`
+    content += `  ⏰ 概念版VIP到期: ${r.conceptExpiry || '未知'}\n`
     if (r.error) {
       content += `  ⚠️ 错误: ${r.error}\n`
     }
