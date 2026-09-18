@@ -30,7 +30,7 @@ const { resolveProxy } = require('./runtime');
 
 const createRequest = (options) => {
   return new Promise(async (resolve, reject) => {
-    const isLite = process.env.platform === 'lite' || (typeof options?.url === 'string' && options.url.startsWith('/youth/'));
+    const isLite = process.env.platform === 'lite';
     const dfid = options?.cookie?.dfid || '-'; // 自定义
     const mid = `${cryptoMd5(dfid)}${cryptoMd5(dfid).slice(0, 7)}`; // 可以自定义
     const uuid = cryptoMd5(`${dfid}${mid}`); // 可以自定义
@@ -62,7 +62,7 @@ const createRequest = (options) => {
     headers['clienttime'] = params.clienttime;
 
     if (options?.encryptKey) {
-      params['key'] = signKey(params['hash'], params['mid'], params['userid'], params['appid'], isLite);
+      params['key'] = signKey(params['hash'], params['mid'], params['userid'], params['appid']);
     }
 
     const data = typeof options?.data === 'object' ? JSON.stringify(options.data) : options?.data || '';
@@ -77,7 +77,7 @@ const createRequest = (options) => {
           break;
         case 'android':
         default:
-          params['signature'] = signatureAndroidParams(params, data, isLite);
+          params['signature'] = signatureAndroidParams(params, data);
           break;
       }
     }
