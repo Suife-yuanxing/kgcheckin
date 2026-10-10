@@ -152,7 +152,7 @@ async function main() {
           }
         }
 
-        // 升级畅听会员 -> 概念版VIP（服务端每天限 1 次；297002 = 今日已升级）
+        // 升级畅听会员 -> 概念版VIP（服务端每天限 1 次；297002 = 今日已升级；297000 = 无需升级，如 svip 概念版仍在有效期）
         printYellow("开始升级概念版VIP...")
         const upgrade = await send(`/youth/day/vip/upgrade?timestrap=${Date.now()}`, "GET", headers)
         let upgradeStatus = '未知'
@@ -162,6 +162,10 @@ async function main() {
         } else if (upgrade.error_code === 297002) {
           printGreen("概念版VIP今日已升级")
           upgradeStatus = '今日已升级'
+        } else if (upgrade.error_code === 297000) {
+          // 297000 = 无需升级（账号 svip 概念版仍在有效期或无升级奖励可领），属正常业务状态
+          printGreen("概念版VIP无需升级（svip 仍在有效期）")
+          upgradeStatus = '无需升级'
         } else {
           printRed("概念版VIP升级失败")
           errorMsg[`${safeNickname} upgrade`] = summarizeResponse(upgrade)
